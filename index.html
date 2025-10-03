@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QR для оплаты услуг МБУ ДО ДШИ №4</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#9ca3af; --text:#e5e7eb; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:720px;margin:32px auto;padding:16px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:16px;padding:20px;box-shadow:0 10px 25px rgba(0,0,0,.25)}
+    h1{margin:0 0 16px;font-size:22px;text-align:center}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px}
+    label{font-size:14px;color:#cbd5e1;display:block;margin-bottom:6px}
+    input[type="text"], select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #374151;background:#0b1220;color:#e5e7eb}
+    .row{display:grid;grid-template-columns:1fr;gap:14px}
+    @media (min-width:700px){ .row{grid-template-columns:1fr 1fr;} }
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:#e5e7eb;cursor:pointer}
+    .btn:hover{border-color:#475569}
+    .btn.primary{background:linear-gradient(180deg,#1e293b,#0b1220);border-color:#334155}
+    .muted{color:#9ca3af;font-size:12px}
+    .qrbox{display:flex;justify-content:center}
+    .qr{background:#fff;padding:14px;border-radius:12px}
+    .ok{color:#86efac}.warn{color:#facc15}.err{color:#f87171}
+
+    /* Autocomplete */
+    .ac{position:relative}
+    .ac-list{position:absolute;z-index:20;left:0;right:0;max-height:280px;overflow:auto;background:#0b1220;border:1px solid #334155;border-radius:10px;margin-top:6px;padding:6px}
+    .ac-item{display:block;width:100%;text-align:left;border:0;background:transparent;color:#e5e7eb;padding:8px 10px;border-radius:8px;cursor:pointer}
+    .ac-item:hover,.ac-item[aria-selected="true"]{background:#1f2937}
+    .ac-empty{color:#9ca3af;padding:8px 10px}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>QR для оплаты услуг МБУ ДО ДШИ №4</h1>
+
+      <div class="grid">
+        <div class="row">
+          <div>
+            <label>Фамилия и имя обучающегося</label>
+            <div class="ac">
+              <input id="fio" type="text" placeholder="Напр.: Иванов Иван" autocomplete="off" />
+              <div id="fioAc" class="ac-list hidden" role="listbox" aria-label="Подсказки ФИО"></div>
+            </div>
+            <div id="matchInfo" class="muted"></div>
+          </div>
+          <div>
+            <label>Договор</label>
+            <select id="persacc"><option value="">— не выбран —</option></select>
+          </div>
+        </div>
+
+        <div>
+          <button id="gen" class="btn primary">Сформировать QR</button>
+          <button id="save" class="btn" title="Скачать PNG">Скачать PNG</button>
+          <span id="status" class="muted"></span>
+        </div>
+
+        <div class="qrbox">
+          <div id="qrcode" class="qr"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Реквизиты
+    const CONST = {
+      Name: 'МБУ ДО ДШИ NO 4',
+      PersonalAcc: '03234643187010002900',
+      BankName: 'ОТДЕЛЕНИЕ ВОЛГОГРАД',
+      BIC: '011806101',
+      CorrespAcc: '40102810445370000021',
+      PayeeINN: '3444064234',
+      CBC: '76207030300600550130',
+      OKTMO: '18701000'
+    };
+    const DEFAULT_SUM='0';
+    const DEFAULT_PAYER_ADDRESS='Рокоссовского 40Г';
+
+    // Данные
+    const DATA_URL_CSV  = './data.csv';
+    const DATA_URL_HTML = './data.csv';
+
+    // Справочник
+    const dict = new Map();      // normalizedFio -> Set(PersAcc)
+    const fioDisplay = new Map();// normalizedFio -> display name
+    let allNames = [];
+
+    const $=(id)=>document.getElementById(id);
+    const fioEl=$('fio'), persAccSel=$('persacc'), genBtn=$('gen'), saveBtn=$('save'), qrBox=$('qrcode'), status=$('status'), matchInfo=$('matchInfo'), acBox=$('fioAc');
+
+    const normalizeFio=(s)=> (s||'').toLowerCase().replace(/\s+/g,'').replace(/[ё]/g,'е');
+
+    // ---- Парсеры ----
+    function parseCSV(text){
+      text=String(text||'').replace(/^\uFEFF/,'');
+      const lines=text.split(/\r?\n/).filter(Boolean);
+      if(!lines.length) return {rows:0};
+      const headerRaw=lines[0];
+      const delim = headerRaw.split(';').length>headerRaw.split(',').length?';':',';
+      const headers = headerRaw.split(delim).map(h=>h.trim());
+      const hlow = headers.map(h=>h.toLowerCase());
+
+      const fioCandidates = hlow.map((h,i)=>({i,h,score:0}));
+      fioCandidates.forEach(o=>{ if(/^(childfio|fio|фио|фио ученика|фио ребенка|фамилия\s*имя(\s*отчество)?)$/.test(o.h)) o.score+=5; });
+      fioCandidates.sort((a,b)=>b.score-a.score);
+
+      const accCandidates = hlow.map((h,i)=>({i,h,score:0}));
+      accCandidates.forEach(o=>{
+        if(/^(persacc|перс(ональн)?\s*сч(е|ё)т|л(ицевой)?\s*сч(е|ё)т|л\/с|лс|лицевой|лс)$/.test(o.h)) o.score+=6;
+        if(/догов/.test(o.h)) o.score+=3;
+      });
+
+      const looksLikeAcc=(s)=>/\d{3,}|\d+\/\d+/.test((s||'').trim()) || /[А-Яа-яA-Za-z]+\s*\d+\/\d+/.test((s||'').trim());
+      const sampleRows=lines.slice(1,Math.min(lines.length,120)).map(r=>r.split(delim));
+      accCandidates.forEach(o=>{
+        let ok=0,total=0; for(const row of sampleRows){ if(row.length<=o.i) continue; total++; if(looksLikeAcc(row[o.i])) ok++; }
+        o.score+=ok;
+      });
+      accCandidates.sort((a,b)=>b.score-a.score);
+
+      const fioIdx=(fioCandidates[0]?.score>0)?fioCandidates[0].i:hlow.findIndex(h=>/^(childfio|fio|фио)$/.test(h));
+      const accIdx=(accCandidates[0]?.score>0)?accCandidates[0].i:hlow.findIndex(h=>/^(persacc|договор|номер|№)$/.test(h));
+      if(fioIdx===-1 || accIdx===-1) throw new Error('Нет колонок ChildFio и PersAcc/№ договора');
+
+      let added=0;
+      for(let i=1;i<lines.length;i++){
+        const cols=lines[i].split(delim);
+        if(cols.length<=Math.max(fioIdx,accIdx)) continue;
+        const fio=(cols[fioIdx]||'').trim();
+        const acc=(cols[accIdx]||'').trim();
+        if(!fio||!acc) continue;
+        const key=normalizeFio(fio);
+        if(!dict.has(key)) dict.set(key,new Set());
+        dict.get(key).add(acc);
+        if(!fioDisplay.has(key)) fioDisplay.set(key,fio);
+        added++;
+      }
+      return {rows:added};
+    }
+
+    function parseHTMLTable(html){
+      const doc=new DOMParser().parseFromString(html,'text/html');
+      const table=doc.querySelector('table'); if(!table) return {rows:0};
+      const rows=[...table.querySelectorAll('tr')]; if(!rows.length) return {rows:0};
+      const headers=[...rows[0].querySelectorAll('th,td')].map(td=>td.textContent.trim());
+      const hlow=headers.map(h=>h.toLowerCase());
+
+      const fioCandidates=hlow.map((h,i)=>({i,h,score:0}));
+      fioCandidates.forEach(o=>{ if(/^(childfio|fio|фио|фио ученика|фио ребенка|фамилия\s*имя(\s*отчество)?)$/.test(o.h)) o.score+=5; });
+      fioCandidates.sort((a,b)=>b.score-a.score);
+
+      const accCandidates=hlow.map((h,i)=>({i,h,score:0}));
+      accCandidates.forEach(o=>{ if(/^(persacc|перс(ональн)?\s*сч(е|ё)т|л(ицевой)?\s*сч(е|ё)т|л\/с|лс|лицевой|лс)$/.test(o.h)) o.score+=6; if(/догов/.test(o.h)) o.score+=3; });
+
+      const looksLikeAcc=(s)=>/\d{3,}|\d+\/\d+/.test((s||'').trim()) || /[А-Яа-яA-Za-z]+\s*\d+\/\д+/.test((s||'').trim());
+      const dataRows=rows.slice(1,Math.min(rows.length,200));
+      accCandidates.forEach(o=>{
+        let ok=0,total=0; for(const tr of dataRows){ const tds=[...tr.querySelectorAll('td')]; if(!tds[o.i]) continue; total++; if(/\d{3,}|\d+\/\d+/.test((tds[o.i].textContent||'').trim()) || /[А-Яа-яA-Za-z]+ \d+\/\d+/.test((tds[o.i].textContent||'').trim())) ok++; }
+        o.score+=ok;
+      });
+      accCandidates.sort((a,b)=>b.score-a.score);
+
+      const fioIdx=(fioCandidates[0]?.score>0)?fioCandidates[0].i:hlow.findIndex(h=>/^(childfio|fio|фио)$/.test(h));
+      const accIdx=(accCandidates[0]?.score>0)?accCandidates[0].i:hlow.findIndex(h=>/^(persacc|договор|номер|№)$/.test(h));
+      if(fioIdx===-1 || accIdx===-1) return {rows:0};
+
+      let count=0;
+      for(let i=1;i<rows.length;i++){
+        const tds=[...rows[i].querySelectorAll('td')]; if(!tds.length) continue;
+        const fio=(tds[fioIdx]?.textContent||'').trim(); const acc=(tds[accIdx]?.textContent||'').trim();
+        if(!fio||!acc) continue;
+        const key=normalizeFio(fio);
+        if(!dict.has(key)) dict.set(key,new Set()); dict.get(key).add(acc);
+        if(!fioDisplay.has(key)) fioDisplay.set(key,fio);
+        count++;
+      }
+      return {rows:count};
+    }
+
+    // ---- Загрузка ----
+    async function loadFromUrl(urlCsv,urlHtml){
+      dict.clear(); fioDisplay.clear();
+      const bust=Date.now();
+      const srcCsv=urlCsv+(urlCsv.includes('?')?'&':'?')+'cb='+bust;
+      const srcHtml=urlHtml+(urlHtml.includes('?')?'&':'?')+'cb='+bust;
+
+      async function fetchText(u){
+        let res; try{ res=await fetch(u,{cache:'no-store',mode:'cors',redirect:'follow'}); }catch(err){ throw new Error('Ошибка сети: '+(err&&err.message||err)); }
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        return {text: await res.text(), ctype: (res.headers.get('content-type')||'').toLowerCase()};
+      }
+
+      try{
+        const {text,ctype}=await fetchText(srcCsv);
+        if(ctype.includes('application/json')) parseJSON(JSON.parse(text));
+        else parseCSV(text);
+      }catch(csvErr){
+        try{ const {text}=await fetchText(srcHtml); parseHTMLTable(text); }
+        catch(_){ console.error(csvErr); }
+      }
+
+      rebuildFioIndex();
+      if(fioEl.value.trim()) handleFioInput();
+    }
+
+    let dataLoaded=false,isLoading=false;
+    async function ensureData(){
+      if(dataLoaded||isLoading) return; isLoading=true;
+      try{ await loadFromUrl(DATA_URL_CSV,DATA_URL_HTML); dataLoaded=true; }
+      catch(e){ console.error(e); }
+      finally{ isLoading=false; }
+    }
+    window.addEventListener('DOMContentLoaded', ensureData);
+
+    // ---- UI helpers ----
+    function fillPersAccOptions(list){
+      persAccSel.innerHTML='<option value=\"\">— не выбран —</option>';
+      list.forEach(acc=>{ const opt=document.createElement('option'); opt.value=acc; opt.textContent=acc; persAccSel.appendChild(opt); });
+      if(list.length===1) persAccSel.value=list[0];
+    }
+    function handleFioInput(){
+      const key=normalizeFio(fioEl.value);
+      const set=dict.get(key);
+      if(set){
+        const arr=[...set].sort((a,b)=>a.localeCompare(b,'ru'));
+        fillPersAccOptions(arr);
+        document.getElementById('matchInfo').textContent = 'Найдено договоров: '+arr.length;
+      }else{
+        fillPersAccOptions([]);
+        document.getElementById('matchInfo').textContent = '';
+      }
+    }
+
+    // ---- Автокомплит ----
+    function rebuildFioIndex(){ allNames=[...fioDisplay.values()].sort((a,b)=>a.localeCompare(b,'ru')); rebuildFioSuggestions(); }
+    function score(query,name){
+      const q=normalizeFio(query), n=normalizeFio(name);
+      if(!q) return Infinity; if(n.startsWith(q)) return 0; if(n.includes(q)) return 1;
+      const parts=q.split(/\s+/).filter(Boolean); let ok=0; for(const p of parts){ if(n.includes(p)) ok++; }
+      return ok===parts.length?2:Infinity;
+    }
+    function rebuildFioSuggestions(){
+      const q=fioEl.value.trim();
+      if(!q){ acBox.classList.add('hidden'); acBox.innerHTML=''; return; }
+      const items=allNames.map(n=>({name:n,score:score(q,n)})).filter(o=>o.score!==Infinity).sort((a,b)=>a.score-b.score||a.name.localeCompare(b.name,'ru')).slice(0,20);
+      if(!items.length){ acBox.innerHTML='<div class=\"ac-empty\">Ничего не найдено</div>'; acBox.classList.remove('hidden'); return; }
+      acBox.innerHTML=items.map((o,i)=>`<button type=\"button\" class=\"ac-item\" role=\"option\" data-name=\"${o.name.replace(/\"/g,'&quot;')}\" ${i===0?'aria-selected=\"true\"':''}>${o.name}</button>`).join('');
+      acBox.classList.remove('hidden');
+    }
+    acBox.addEventListener('mousedown', (e)=>{ const btn=e.target.closest('.ac-item'); if(!btn) return; e.preventDefault(); applyFio(btn.dataset.name); });
+    function applyFio(name){ fioEl.value=name; acBox.classList.add('hidden'); acBox.innerHTML=''; handleFioInput(); }
+    fioEl.addEventListener('input', ()=>{ rebuildFioSuggestions(); handleFioInput(); });
+    document.addEventListener('click', (e)=>{ if(!acBox.contains(e.target) && e.target!==fioEl){ acBox.classList.add('hidden'); } });
+
+    // ---- QR ----
+    function buildQRString(){
+      const ChildFio=fioEl.value.trim();
+      const PersAcc=persAccSel.value.trim();
+      if(!ChildFio) throw new Error('Введите ФИО ученика');
+      if(!PersAcc) throw new Error('Выберите договор');
+      return [
+        'ST00012',
+        `Name=${CONST.Name}`,
+        `PersonalAcc=${CONST.PersonalAcc}`,
+        `BankName=${CONST.BankName}`,
+        `BIC=${CONST.BIC}`,
+        `CorrespAcc=${CONST.CorrespAcc}`,
+        `PayeeINN=${CONST.PayeeINN}`,
+        `CBC=${CONST.CBC}`,
+        `OKTMO=${CONST.OKTMO}`,
+        `PersAcc=${PersAcc}`,
+        `ClassNum=0`,
+        `ChildFio=${ChildFio}`,
+        `Sum=${DEFAULT_SUM}`,
+        `PayerAddress=${DEFAULT_PAYER_ADDRESS}`,
+        `purpose=${ChildFio} ${PersAcc}`
+      ].join('|');
+    }
+    const QR_FALLBACKS=[(d)=>`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(d)}`,(d)=>`https://quickchart.io/qr?size=256&text=${encodeURIComponent(d)}`,(d)=>`https://chart.googleapis.com/chart?cht=qr&chs=256x256&chl=${encodeURIComponent(d)}`];
+function renderQR(){
+      try{
+        const text=buildQRString();
+        status.textContent='';
+        qrBox.innerHTML='';
+        const img=new Image(); img.width=256; img.height=256; img.alt='QR';
+        img.onerror=()=>{ status.innerHTML='<span class=\"err\">Не удалось загрузить QR.</span>'; };
+        img.src='https://api.qrserver.com/v1/create-qr-code/?size=256x256&data='+encodeURIComponent(text);
+        qrBox.appendChild(img);
+      }catch(e){
+        qrBox.innerHTML=''; status.innerHTML=`<span class=\"err\">${e.message}</span>`;
+      }
+    }
+    genBtn.addEventListener('click', renderQR);
+
+    saveBtn.addEventListener('click', ()=>{
+      const img=qrBox.querySelector('img'); if(!img){ status.innerHTML='<span class=\"warn\">Сначала сформируйте QR.</span>'; return; }
+      const fio=fioEl.value.trim().replace(/\s+/g,'_'); const acc=persAccSel.value.trim();
+      const a=document.createElement('a'); a.download=`QR_${fio}_${acc}.png`; a.href=img.src; a.click();
+    });
+
+  </script>
+</body>
+</html>
