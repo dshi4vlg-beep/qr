@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>QR для оплаты услуг МБУ ДО ДШИ №4</title>
+  <title>QR       4</title>
   <style>
     :root { --bg:#0f172a; --card:#111827; --muted:#9ca3af; --text:#e5e7eb; }
     *{box-sizing:border-box}
@@ -39,27 +39,27 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>QR для оплаты услуг МБУ ДО ДШИ №4</h1>
+      <h1>QR       4</h1>
 
       <div class="grid">
         <div class="row">
           <div>
-            <label>Фамилия и имя обучающегося</label>
+            <label>   </label>
             <div class="ac">
-              <input id="fio" type="text" placeholder="Напр.: Иванов Иван" autocomplete="off" />
-              <div id="fioAc" class="ac-list hidden" role="listbox" aria-label="Подсказки ФИО"></div>
+              <input id="fio" type="text" placeholder=".:  " autocomplete="off" />
+              <div id="fioAc" class="ac-list hidden" role="listbox" aria-label=" "></div>
             </div>
             <div id="matchInfo" class="muted"></div>
           </div>
           <div>
-            <label>Договор</label>
-            <select id="persacc"><option value="">— не выбран —</option></select>
+            <label></label>
+            <select id="persacc"><option value="">   </option></select>
           </div>
         </div>
 
         <div>
-          <button id="gen" class="btn primary">Сформировать QR</button>
-          <button id="save" class="btn" title="Скачать PNG">Скачать PNG</button>
+          <button id="gen" class="btn primary"> QR</button>
+          <button id="save" class="btn" title=" PNG"> PNG</button>
           <span id="status" class="muted"></span>
         </div>
 
@@ -71,11 +71,11 @@
   </div>
 
   <script>
-    // Реквизиты
+    // 
     const CONST = {
-      Name: 'МБУ ДО ДШИ NO 4',
+      Name: '   NO 4',
       PersonalAcc: '03234643187010002900',
-      BankName: 'ОТДЕЛЕНИЕ ВОЛГОГРАД',
+      BankName: ' ',
       BIC: '011806101',
       CorrespAcc: '40102810445370000021',
       PayeeINN: '3444064234',
@@ -83,13 +83,13 @@
       OKTMO: '18701000'
     };
     const DEFAULT_SUM='0';
-    const DEFAULT_PAYER_ADDRESS='Рокоссовского 40Г';
+    const DEFAULT_PAYER_ADDRESS=' 40';
 
-    // Данные
+    // 
     const DATA_URL_CSV  = './data.csv';
     const DATA_URL_HTML = './data.csv';
 
-    // Справочник
+    // 
     const dict = new Map();      // normalizedFio -> Set(PersAcc)
     const fioDisplay = new Map();// normalizedFio -> display name
     let allNames = [];
@@ -97,9 +97,9 @@
     const $=(id)=>document.getElementById(id);
     const fioEl=$('fio'), persAccSel=$('persacc'), genBtn=$('gen'), saveBtn=$('save'), qrBox=$('qrcode'), status=$('status'), matchInfo=$('matchInfo'), acBox=$('fioAc');
 
-    const normalizeFio=(s)=> (s||'').toLowerCase().replace(/\s+/g,'').replace(/[ё]/g,'е');
+    const normalizeFio=(s)=> (s||'').toLowerCase().replace(/\s+/g,'').replace(/[]/g,'');
 
-    // ---- Парсеры ----
+    // ----  ----
     function parseCSV(text){
       text=String(text||'').replace(/^\uFEFF/,'');
       const lines=text.split(/\r?\n/).filter(Boolean);
@@ -110,16 +110,16 @@
       const hlow = headers.map(h=>h.toLowerCase());
 
       const fioCandidates = hlow.map((h,i)=>({i,h,score:0}));
-      fioCandidates.forEach(o=>{ if(/^(childfio|fio|фио|фио ученика|фио ребенка|фамилия\s*имя(\s*отчество)?)$/.test(o.h)) o.score+=5; });
+      fioCandidates.forEach(o=>{ if(/^(childfio|fio|| | |\s*(\s*)?)$/.test(o.h)) o.score+=5; });
       fioCandidates.sort((a,b)=>b.score-a.score);
 
       const accCandidates = hlow.map((h,i)=>({i,h,score:0}));
       accCandidates.forEach(o=>{
-        if(/^(persacc|перс(ональн)?\s*сч(е|ё)т|л(ицевой)?\s*сч(е|ё)т|л\/с|лс|лицевой|лс)$/.test(o.h)) o.score+=6;
-        if(/догов/.test(o.h)) o.score+=3;
+        if(/^(persacc|()?\s*(|)|()?\s*(|)|\/|||)$/.test(o.h)) o.score+=6;
+        if(//.test(o.h)) o.score+=3;
       });
 
-      const looksLikeAcc=(s)=>/\d{3,}|\d+\/\d+/.test((s||'').trim()) || /[А-Яа-яA-Za-z]+\s*\d+\/\d+/.test((s||'').trim());
+      const looksLikeAcc=(s)=>/\d{3,}|\d+\/\d+/.test((s||'').trim()) || /[--A-Za-z]+\s*\d+\/\d+/.test((s||'').trim());
       const sampleRows=lines.slice(1,Math.min(lines.length,120)).map(r=>r.split(delim));
       accCandidates.forEach(o=>{
         let ok=0,total=0; for(const row of sampleRows){ if(row.length<=o.i) continue; total++; if(looksLikeAcc(row[o.i])) ok++; }
@@ -127,9 +127,9 @@
       });
       accCandidates.sort((a,b)=>b.score-a.score);
 
-      const fioIdx=(fioCandidates[0]?.score>0)?fioCandidates[0].i:hlow.findIndex(h=>/^(childfio|fio|фио)$/.test(h));
-      const accIdx=(accCandidates[0]?.score>0)?accCandidates[0].i:hlow.findIndex(h=>/^(persacc|договор|номер|№)$/.test(h));
-      if(fioIdx===-1 || accIdx===-1) throw new Error('Нет колонок ChildFio и PersAcc/№ договора');
+      const fioIdx=(fioCandidates[0]?.score>0)?fioCandidates[0].i:hlow.findIndex(h=>/^(childfio|fio|)$/.test(h));
+      const accIdx=(accCandidates[0]?.score>0)?accCandidates[0].i:hlow.findIndex(h=>/^(persacc|||)$/.test(h));
+      if(fioIdx===-1 || accIdx===-1) throw new Error('  ChildFio  PersAcc/ ');
 
       let added=0;
       for(let i=1;i<lines.length;i++){
@@ -155,22 +155,22 @@
       const hlow=headers.map(h=>h.toLowerCase());
 
       const fioCandidates=hlow.map((h,i)=>({i,h,score:0}));
-      fioCandidates.forEach(o=>{ if(/^(childfio|fio|фио|фио ученика|фио ребенка|фамилия\s*имя(\s*отчество)?)$/.test(o.h)) o.score+=5; });
+      fioCandidates.forEach(o=>{ if(/^(childfio|fio|| | |\s*(\s*)?)$/.test(o.h)) o.score+=5; });
       fioCandidates.sort((a,b)=>b.score-a.score);
 
       const accCandidates=hlow.map((h,i)=>({i,h,score:0}));
-      accCandidates.forEach(o=>{ if(/^(persacc|перс(ональн)?\s*сч(е|ё)т|л(ицевой)?\s*сч(е|ё)т|л\/с|лс|лицевой|лс)$/.test(o.h)) o.score+=6; if(/догов/.test(o.h)) o.score+=3; });
+      accCandidates.forEach(o=>{ if(/^(persacc|()?\s*(|)|()?\s*(|)|\/|||)$/.test(o.h)) o.score+=6; if(//.test(o.h)) o.score+=3; });
 
-      const looksLikeAcc=(s)=>/\d{3,}|\d+\/\d+/.test((s||'').trim()) || /[А-Яа-яA-Za-z]+\s*\d+\/\д+/.test((s||'').trim());
+      const looksLikeAcc=(s)=>/\d{3,}|\d+\/\d+/.test((s||'').trim()) || /[--A-Za-z]+\s*\d+\/\+/.test((s||'').trim());
       const dataRows=rows.slice(1,Math.min(rows.length,200));
       accCandidates.forEach(o=>{
-        let ok=0,total=0; for(const tr of dataRows){ const tds=[...tr.querySelectorAll('td')]; if(!tds[o.i]) continue; total++; if(/\d{3,}|\d+\/\d+/.test((tds[o.i].textContent||'').trim()) || /[А-Яа-яA-Za-z]+ \d+\/\d+/.test((tds[o.i].textContent||'').trim())) ok++; }
+        let ok=0,total=0; for(const tr of dataRows){ const tds=[...tr.querySelectorAll('td')]; if(!tds[o.i]) continue; total++; if(/\d{3,}|\d+\/\d+/.test((tds[o.i].textContent||'').trim()) || /[--A-Za-z]+ \d+\/\d+/.test((tds[o.i].textContent||'').trim())) ok++; }
         o.score+=ok;
       });
       accCandidates.sort((a,b)=>b.score-a.score);
 
-      const fioIdx=(fioCandidates[0]?.score>0)?fioCandidates[0].i:hlow.findIndex(h=>/^(childfio|fio|фио)$/.test(h));
-      const accIdx=(accCandidates[0]?.score>0)?accCandidates[0].i:hlow.findIndex(h=>/^(persacc|договор|номер|№)$/.test(h));
+      const fioIdx=(fioCandidates[0]?.score>0)?fioCandidates[0].i:hlow.findIndex(h=>/^(childfio|fio|)$/.test(h));
+      const accIdx=(accCandidates[0]?.score>0)?accCandidates[0].i:hlow.findIndex(h=>/^(persacc|||)$/.test(h));
       if(fioIdx===-1 || accIdx===-1) return {rows:0};
 
       let count=0;
@@ -186,7 +186,7 @@
       return {rows:count};
     }
 
-    // ---- Загрузка ----
+    // ----  ----
     async function loadFromUrl(urlCsv,urlHtml){
       dict.clear(); fioDisplay.clear();
       const bust=Date.now();
@@ -194,7 +194,7 @@
       const srcHtml=urlHtml+(urlHtml.includes('?')?'&':'?')+'cb='+bust;
 
       async function fetchText(u){
-        let res; try{ res=await fetch(u,{cache:'no-store',mode:'cors',redirect:'follow'}); }catch(err){ throw new Error('Ошибка сети: '+(err&&err.message||err)); }
+        let res; try{ res=await fetch(u,{cache:'no-store',mode:'cors',redirect:'follow'}); }catch(err){ throw new Error(' : '+(err&&err.message||err)); }
         if(!res.ok) throw new Error('HTTP '+res.status);
         return {text: await res.text(), ctype: (res.headers.get('content-type')||'').toLowerCase()};
       }
@@ -223,7 +223,7 @@
 
     // ---- UI helpers ----
     function fillPersAccOptions(list){
-      persAccSel.innerHTML='<option value=\"\">— не выбран —</option>';
+      persAccSel.innerHTML='<option value=\"\">   </option>';
       list.forEach(acc=>{ const opt=document.createElement('option'); opt.value=acc; opt.textContent=acc; persAccSel.appendChild(opt); });
       if(list.length===1) persAccSel.value=list[0];
     }
@@ -233,14 +233,14 @@
       if(set){
         const arr=[...set].sort((a,b)=>a.localeCompare(b,'ru'));
         fillPersAccOptions(arr);
-        document.getElementById('matchInfo').textContent = 'Найдено договоров: '+arr.length;
+        document.getElementById('matchInfo').textContent = ' : '+arr.length;
       }else{
         fillPersAccOptions([]);
         document.getElementById('matchInfo').textContent = '';
       }
     }
 
-    // ---- Автокомплит ----
+    // ----  ----
     function rebuildFioIndex(){ allNames=[...fioDisplay.values()].sort((a,b)=>a.localeCompare(b,'ru')); rebuildFioSuggestions(); }
     function score(query,name){
       const q=normalizeFio(query), n=normalizeFio(name);
@@ -252,7 +252,7 @@
       const q=fioEl.value.trim();
       if(!q){ acBox.classList.add('hidden'); acBox.innerHTML=''; return; }
       const items=allNames.map(n=>({name:n,score:score(q,n)})).filter(o=>o.score!==Infinity).sort((a,b)=>a.score-b.score||a.name.localeCompare(b.name,'ru')).slice(0,20);
-      if(!items.length){ acBox.innerHTML='<div class=\"ac-empty\">Ничего не найдено</div>'; acBox.classList.remove('hidden'); return; }
+      if(!items.length){ acBox.innerHTML='<div class=\"ac-empty\">  </div>'; acBox.classList.remove('hidden'); return; }
       acBox.innerHTML=items.map((o,i)=>`<button type=\"button\" class=\"ac-item\" role=\"option\" data-name=\"${o.name.replace(/\"/g,'&quot;')}\" ${i===0?'aria-selected=\"true\"':''}>${o.name}</button>`).join('');
       acBox.classList.remove('hidden');
     }
@@ -265,8 +265,8 @@
     function buildQRString(){
       const ChildFio=fioEl.value.trim();
       const PersAcc=persAccSel.value.trim();
-      if(!ChildFio) throw new Error('Введите ФИО ученика');
-      if(!PersAcc) throw new Error('Выберите договор');
+      if(!ChildFio) throw new Error('  ');
+      if(!PersAcc) throw new Error(' ');
       return [
         'ST00012',
         `Name=${CONST.Name}`,
@@ -286,27 +286,112 @@
       ].join('|');
     }
     const QR_FALLBACKS=[(d)=>`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(d)}`,(d)=>`https://quickchart.io/qr?size=256&text=${encodeURIComponent(d)}`,(d)=>`https://chart.googleapis.com/chart?cht=qr&chs=256x256&chl=${encodeURIComponent(d)}`];
+
+
+function escapeText(s){
+  return String(s || '').replace(/\s+/g, ' ').trim();
+}
+
+function makeLabeledCanvas(qrImg, fio, acc){
+  const qrSize = 256;
+  const pad = 14;              // совпадает с .qr { padding:14px } в CSS
+  const textPadTop = 10;
+  const textPadBottom = 10;
+
+  fio = escapeText(fio);
+  acc = escapeText(acc);
+
+  const line1 = fio;
+  const line2 = `Договор: ${acc}`;
+
+  const font1 = '600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif';
+  const font2 = '400 14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif';
+  const lineGap = 6;
+
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+
+  const w = qrSize + pad * 2;
+  const textH = textPadTop + 18 + lineGap + 16 + textPadBottom;
+  const h = pad + qrSize + textH + pad;
+
+  c.width = w;
+  c.height = h;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.drawImage(qrImg, pad, pad, qrSize, qrSize);
+
+  const y0 = pad + qrSize + textPadTop;
+
+  ctx.fillStyle = '#111827';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+
+  ctx.font = font1;
+  ctx.fillText(line1, w / 2, y0);
+
+  ctx.font = font2;
+  ctx.fillText(line2, w / 2, y0 + 18 + lineGap);
+
+  return c;
+}
+
 function renderQR(){
-      try{
-        const text=buildQRString();
-        status.textContent='';
-        qrBox.innerHTML='';
-        const img=new Image(); img.width=256; img.height=256; img.alt='QR';
-        img.onerror=()=>{ status.innerHTML='<span class=\"err\">Не удалось загрузить QR.</span>'; };
-        img.src='https://api.qrserver.com/v1/create-qr-code/?size=256x256&data='+encodeURIComponent(text);
-        qrBox.appendChild(img);
-      }catch(e){
-        qrBox.innerHTML=''; status.innerHTML=`<span class=\"err\">${e.message}</span>`;
+  try{
+    const text = buildQRString();
+    const fio = fioEl.value.trim();
+    const acc = persAccSel.value.trim();
+
+    status.textContent = '';
+    qrBox.innerHTML = '';
+
+    const img = new Image();
+    img.width = 256;
+    img.height = 256;
+    img.alt = 'QR';
+    img.crossOrigin = 'anonymous';
+
+    let i = 0;
+    const tryNext = () => {
+      if(i >= QR_FALLBACKS.length){
+        status.innerHTML = '<span class="err">Не удалось сгенерировать QR (все провайдеры недоступны).</span>';
+        return;
       }
-    }
+      img.src = QR_FALLBACKS[i++](text);
+    };
+
+    img.onerror = tryNext;
+
+    img.onload = () => {
+      const canvas = makeLabeledCanvas(img, fio, acc);
+      qrBox.innerHTML = '';
+      qrBox.appendChild(canvas);
+    };
+
+    tryNext();
+  }catch(e){
+    qrBox.innerHTML = '';
+    status.innerHTML = `<span class="err">${e.message}</span>`;
+  }
+}
     genBtn.addEventListener('click', renderQR);
 
     saveBtn.addEventListener('click', ()=>{
-      const img=qrBox.querySelector('img'); if(!img){ status.innerHTML='<span class=\"warn\">Сначала сформируйте QR.</span>'; return; }
-      const fio=fioEl.value.trim().replace(/\s+/g,'_'); const acc=persAccSel.value.trim();
-      const a=document.createElement('a'); a.download=`QR_${fio}_${acc}.png`; a.href=img.src; a.click();
-    });
+  const canvas = qrBox.querySelector('canvas');
+  if(!canvas){
+    status.innerHTML = '<span class="warn">Сначала сформируйте QR.</span>';
+    return;
+  }
 
-  </script>
+  const fio = fioEl.value.trim().replace(/\s+/g,'_');
+  const acc = persAccSel.value.trim();
+
+  const a = document.createElement('a');
+  a.download = `QR_${fio}_${acc}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+});</script>
 </body>
 </html>
