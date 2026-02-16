@@ -286,26 +286,130 @@
       ].join('|');
     }
     const QR_FALLBACKS=[(d)=>`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(d)}`,(d)=>`https://quickchart.io/qr?size=256&text=${encodeURIComponent(d)}`,(d)=>`https://chart.googleapis.com/chart?cht=qr&chs=256x256&chl=${encodeURIComponent(d)}`];
-function renderQR(){
+    function escapeText(s){
+      return String(s || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function makeLabeledCanvas(qrImg, fio, acc){
+      const qrSize = 256;
+      const pad = 14;              // совпадает с .qr { padding:14px } в CSS
+      const textPadTop = 10;
+      const textPadBottom = 10;
+
+      fio = escapeText(fio);
+      acc = escapeText(acc);
+
+      const line1 = fio;
+      const line2 = `Договор: ${acc}`;
+
+      // подбираем высоту подписи
+      const font1 = '600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif';
+      const font2 = '400 14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif';
+      const lineGap = 6;
+
+      // canvas с белым фоном
+      const c = document.createElement('canvas');
+      const ctx = c.getContext('2d');
+
+      // ширина: QR + паддинги как у блока .qr
+      const w = qrSize + pad * 2;
+
+      // вычислим высоту текста через measureText
+      // (для простоты - фиксированная высота под 2 строки)
+      const textH = textPadTop + 18 + lineGap + 16 + textPadBottom;
+
+      const h = pad + qrSize + textH + pad;
+
+      c.width = w;
+      c.height = h;
+
+      // фон
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+
+      // QR
+      ctx.drawImage(qrImg, pad, pad, qrSize, qrSize);
+
+      // подпись
+      const y0 = pad + qrSize + textPadTop;
+
+      ctx.fillStyle = '#111827'; // темный, как в твоей теме
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+
+      ctx.font = font1;
+      ctx.fillText(line1, w / 2, y0);
+
+      ctx.font = font2;
+      ctx.fillText(line2, w / 2, y0 + 18 + lineGap);
+
+      return c;
+    }
+
+        function renderQR(){
       try{
-        const text=buildQRString();
-        status.textContent='';
-        qrBox.innerHTML='';
-        const img=new Image(); img.width=256; img.height=256; img.alt='QR';
-        img.onerror=()=>{ status.innerHTML='<span class=\"err\">Не удалось загрузить QR.</span>'; };
-        img.src='https://api.qrserver.com/v1/create-qr-code/?size=256x256&data='+encodeURIComponent(text);
-        qrBox.appendChild(img);
+        const text = buildQRString();
+        const fio = fioEl.value.trim();
+        const acc = persAccSel.value.trim();
+
+        status.textContent = '';
+        qrBox.innerHTML = '';
+
+        // загрузка QR с фолбэком
+        const img = new Image();
+        img.width = 256;
+        img.height = 256;
+        img.alt = 'QR';
+        img.crossOrigin = 'anonymous'; // чтобы canvas мог сохраняться (если провайдер разрешит)
+
+        let i = 0;
+        const tryNext = () => {
+          if(i >= QR_FALLBACKS.length){
+            status.innerHTML = '<span class="err">Не удалось сгенерировать QR (все провайдеры недоступны).</span>';
+            return;
+          }
+          img.src = QR_FALLBACKS[i++](text);
+        };
+
+        img.onerror = tryNext;
+
+        img.onload = () => {
+          // рисуем итоговую картинку QR + подпись прямо на ней
+          const canvas = makeLabeledCanvas(img, fio, acc);
+
+          // показываем canvas вместо img
+          qrBox.innerHTML = '';
+          qrBox.appendChild(canvas);
+
+          // сохраним ссылку на canvas для скачивания
+          qrBox.dataset.hasCanvas = '1';
+        };
+
+        tryNext();
       }catch(e){
-        qrBox.innerHTML=''; status.innerHTML=`<span class=\"err\">${e.message}</span>`;
+        qrBox.innerHTML = '';
+        status.innerHTML = `<span class="err">${e.message}</span>`;
       }
     }
+
     genBtn.addEventListener('click', renderQR);
 
-    saveBtn.addEventListener('click', ()=>{
-      const img=qrBox.querySelector('img'); if(!img){ status.innerHTML='<span class=\"warn\">Сначала сформируйте QR.</span>'; return; }
-      const fio=fioEl.value.trim().replace(/\s+/g,'_'); const acc=persAccSel.value.trim();
-      const a=document.createElement('a'); a.download=`QR_${fio}_${acc}.png`; a.href=img.src; a.click();
+        saveBtn.addEventListener('click', ()=>{
+      const canvas = qrBox.querySelector('canvas');
+      if(!canvas){
+        status.innerHTML = '<span class="warn">Сначала сформируйте QR.</span>';
+        return;
+      }
+
+      const fio = fioEl.value.trim().replace(/\s+/g,'_');
+      const acc = persAccSel.value.trim();
+
+      const a = document.createElement('a');
+      a.download = `QR_${fio}_${acc}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
     });
+
 
   </script>
 </body>
